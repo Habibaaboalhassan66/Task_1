@@ -1,6 +1,6 @@
 import Joi from 'joi';
 import { Perk } from '../models/Perk.js';
-
+// data leha specific format
 // validation schema for creating/updating a perk
 const perkSchema = Joi.object({
   // check that title is at least 2 characters long, and required
@@ -19,7 +19,7 @@ const perkSchema = Joi.object({
   
 
 // Filter perks by exact title match if title query parameter is provided 
-export async function filterPerks(req, res, next) {
+export async function filterPerks(req, res, next) {// define a perk using a specific title(youtube /watch?v=abc123 "law fa list"/watch?v=abc123 v=id &list=id &index=number)
   try {
     const { title } = req.query     ;
     if (title) {
@@ -67,12 +67,30 @@ export async function createPerk(req, res, next) {
     next(err);
   }
 }
-// TODO
+
 // Update an existing perk by ID and validate only the fields that are being updated 
 export async function updatePerk(req, res, next) {
-  
-}
+  try {
+    // Validate only the fields being updated
+    const partialSchema = perkSchema.fork(Object.keys(req.body), field => field.required()).fork(
+      Object.keys(perkSchema.describe().keys).filter(key => !Object.keys(req.body).includes(key)),
+      field => field.optional()
+    );
+    const { value, error } = partialSchema.validate(req.body, { noDefaults: true, stripUnknown: true });
+    if (error) return res.status(400).json({ message: error.message });
 
+    const doc = await Perk.findByIdAndUpdate(
+      req.params.id,
+      { $set: value },
+      { new: true, runValidators: true }
+    );
+    if (!doc) return res.status(404).json({ message: 'Perk not found' });
+    res.json({ perk: doc });
+  } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ message: 'Duplicate perk for this merchant' });
+    next(err);
+  }
+}
 
 // Delete a perk by ID
 export async function deletePerk(req, res, next) {
